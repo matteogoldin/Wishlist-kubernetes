@@ -1,0 +1,10 @@
+# Public configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: wishlist-config
+  namespace: wishlist
+data:
+  PORT: "8080"
+  MYSQL_DATABASE: "wishlists-schema"
+  DB_URL: "jdbc:mysql://mysql:3306/wishlists-schema"

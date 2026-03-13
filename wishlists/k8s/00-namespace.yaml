@@ -1,0 +1,5 @@
+# Create a logical space ("folder") to keep this application separate from others
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: wishlist

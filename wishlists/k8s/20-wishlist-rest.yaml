@@ -1,0 +1,74 @@
+# Wishlist REST API deployments and service
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wishlist-rest
+  namespace: wishlist
+spec:
+  replicas: 5
+  selector:
+    matchLabels:
+      app: wishlist-rest
+  template:
+    metadata:
+      labels:
+        app: wishlist-rest
+    spec:
+      containers:
+        - name: wishlist-rest
+          image: wishlist-rest:local
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+          env:
+            - name: PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: wishlist-config
+                  key: PORT
+            - name: DB_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: wishlist-config
+                  key: DB_URL
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: wishlist-db-secret
+                  key: MYSQL_USER
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: wishlist-db-secret
+                  key: MYSQL_PASSWORD
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            periodSeconds: 5
+            failureThreshold: 24
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 20
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: wishlist-rest
+  namespace: wishlist
+spec:
+  selector:
+    app: wishlist-rest
+  ports:
+    - port: 8080
+      targetPort: 8080
+  type: ClusterIP
