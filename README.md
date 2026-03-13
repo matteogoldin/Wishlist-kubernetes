@@ -26,7 +26,7 @@
   ```
   
 ## Scope
-**Wishlists App** is a small Java application for wishlist management, created in a learning context focused on **TDD, build automation, quality checks, and CI**. The project is a **Swing desktop application** backed by **MySQL** and built with **Maven**.
+**Wishlists App** is a small Java application for wishlist management, created in a learning context focused on **TDD, build automation, quality checks, and CI**. The project started as a **Swing desktop application** backed by **MySQL** and built with **Maven**, and has since been extended to include a **REST API layer built with Javalin**, enabling HTTP-based access to the same business logic. The REST entry point is designed to be **container-friendly** and deployable on **Docker and Kubernetes**.
 
 ---
 
@@ -48,6 +48,7 @@ wishlists/
 ├── src/
 │   ├── main/
 │   │   ├── java/
+│   │   │   ├── api/
 │   │   │   ├── app/
 │   │   │   ├── businesslogic/
 │   │   │   ├── daos/
@@ -80,6 +81,17 @@ Keeping these layers separate makes the intent of each test suite clearer and av
 ---
 
 ## Packages
+
+### `api`
+Contains the **REST API layer**, built on top of [Javalin](https://javalin.io/).
+
+Sub-packages:
+- `dto` — Data Transfer Objects used to serialize/deserialize HTTP request and response bodies
+- `mapper` — mappers that convert between domain model objects and DTOs
+- `router` — registers the HTTP routes on the Javalin instance
+- `service` — service facade consumed by the router to execute business operations
+
+---
 
 ### `app`
 Contains the **application entry point**.
@@ -152,6 +164,48 @@ Present elements:
 Typical role:
 - JPA configuration through `persistence.xml` inside `META-INF`
 - logging configuration
+
+---
+
+## Environment Variables
+
+The REST entry point (`WishlistRestApp`) supports the following environment variables, which take precedence over the corresponding CLI arguments and `persistence.xml` defaults. This makes the application straightforward to configure in **Docker** and **Kubernetes** environments without rebuilding the image.
+
+| Variable      | Description                                                                 | Default (persistence.xml)                              |
+|---------------|-----------------------------------------------------------------------------|--------------------------------------------------------|
+| `PORT`        | HTTP port the Javalin server listens on                                     | `8080`                                                 |
+| `DB_URL`      | Full JDBC URL of the MySQL instance (e.g. `jdbc:mysql://mysql-svc:3306/wishlists`) | `jdbc:mysql://localhost:3309/wishlists-schema` |
+| `DB_USER`     | Database username                                                           | `java-client`                                          |
+| `DB_PASSWORD` | Database password                                                           | `password`                                             |
+
+Example (Docker):
+```bash
+docker run \
+  -e PORT=8080 \
+  -e DB_URL=jdbc:mysql://mysql-svc:3306/wishlists \
+  -e DB_USER=java-client \
+  -e DB_PASSWORD=secret \
+  wishlists-rest:latest
+```
+
+Example (Kubernetes `env` block in a Pod spec):
+```yaml
+env:
+  - name: PORT
+    value: "8080"
+  - name: DB_URL
+    value: "jdbc:mysql://mysql-svc:3306/wishlists"
+  - name: DB_USER
+    valueFrom:
+      secretKeyRef:
+        name: db-secret
+        key: username
+  - name: DB_PASSWORD
+    valueFrom:
+      secretKeyRef:
+        name: db-secret
+        key: password
+```
 
 ---
 
