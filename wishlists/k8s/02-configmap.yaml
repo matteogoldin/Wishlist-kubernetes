@@ -1,4 +1,4 @@
-# Public configuration
+# Non-sensitive configuration
 apiVersion: v1
 kind: ConfigMap
 metadata:

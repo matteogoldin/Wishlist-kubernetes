@@ -1,408 +1,489 @@
 # Wishlists App
-[![Java CI with Maven](https://github.com/matteogoldin/Wishlist/actions/workflows/maven_build_linux.yml/badge.svg)](https://github.com/matteogoldin/Wishlist/actions/workflows/maven_build_linux.yml)
-[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=matteogoldin_Wishlist&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=matteogoldin_Wishlist)
-[![Coverage Status](https://coveralls.io/repos/github/matteogoldin/Wishlist/badge.svg?branch=main)](https://coveralls.io/github/matteogoldin/Wishlist?branch=main)
-[![pitest](https://github.com/matteogoldin/Wishlist/actions/workflows/pit.yml/badge.svg)](https://github.com/matteogoldin/Wishlist/actions/workflows/pit.yml)
 
-## Requirements
-- JDK11 or JDK17
-- Eclipse IDE
-- Maven
-- Docker
+A simple Java REST API for managing wishlists, built with **Javalin** and **Hibernate/JPA**, and progressively evolved to run on **Kubernetes**.
 
-## Usage
-- Import the Git repository in Eclipse IDE
-- Build the project with Maven
-  ```bash
-  mvn clean install
-  ```
-- Create a Docker container with an instance of MySQL runninng on it
-  ```bash
-  docker run --name wishlist-app-container -d -p 3309:3306 -e MYSQL_ROOT_PASSWORD=password -e MYSQL_DATABASE=wishlists-schema -e MYSQL_USER=java-client -e MYSQL_PASSWORD=password --restart unless-stopped -v mysql:/var/lib/mysql mysql:8.0.33
-  ```
-- Launch the application
-  ```bash
-  java -jar <full-path-project-root-directory>\target\wishlists-0.0.1-jar-with-dependencies.jar
-  ```
+The project is not only a deployable application, but also a hands-on learning path covering containerisation, orchestration, scaling, health checks, and persistent storage.
 
 ---
 
-## Run the REST API in Docker
+## Stack
 
-The Javalin REST API can be packaged and executed as a Docker container.
-
-Build the image from the repository root:
-
-```bash
-docker build -t wishlist-rest:local -f wishlists/.docker-wishlists/Dockerfile wishlists
-```
-
-Start a MySQL container:
-
-```bash
-docker run --name wishlist-mysql -d \
-  -p 3309:3306 \
-  -e MYSQL_ROOT_PASSWORD=password \
-  -e MYSQL_DATABASE=wishlists-schema \
-  -e MYSQL_USER=java-client \
-  -e MYSQL_PASSWORD=password \
-  --restart unless-stopped \
-  mysql:8.0.33
-```
-
-Start the REST API container:
-
-```bash
-docker run --name wishlist-rest -d \
-  -p 8080:8080 \
-  -e PORT=8080 \
-  -e DB_URL=jdbc:mysql://host.docker.internal:3309/wishlists-schema \
-  -e DB_USER=java-client \
-  -e DB_PASSWORD=password \
-  wishlist-rest:local
-```
-
-Health check:
-
-```bash
-curl http://localhost:8080/health
-```
+- **Java 17**
+- **Maven** — build and packaging
+- **Javalin** — lightweight REST framework
+- **Hibernate / JPA** — ORM persistence
+- **MySQL** — relational database
+- **Log4j2** — logging
+- **Docker** — containerisation
+- **Kubernetes** — orchestration
+- **Minikube** — local Kubernetes cluster for development and experimentation
 
 ---
 
-## Scope
-**Wishlists App** is a small Java application for wishlist management, created in a learning context focused on **TDD, build automation, quality checks, and CI**. The project started as a **Swing desktop application** backed by **MySQL** and built with **Maven**, and has since been extended to include a **REST API layer built with Javalin**, enabling HTTP-based access to the same business logic. The REST entry point is designed to be **container-friendly** and deployable on **Docker and Kubernetes**.
+## Project structure
 
----
-
-## Core stack
-- **Java**
-- **Maven**
-- **Swing** for the desktop UI
-- **Hibernate / JPA** for persistence
-- **MySQL** as the relational database
-- **JUnit, Mockito, AssertJ, and Cucumber** for testing at different levels
-- **Log4j2** for logging
-
----
-
-## General structure
 ```text
 wishlists/
 ├── pom.xml
-├── src/
-│   ├── main/
-│   │   ├── java/
-│   │   │   ├── api/
-│   │   │   ├── app/
-│   │   │   ├── businesslogic/
-│   │   │   ├── daos/
-│   │   │   ├── model/
-│   │   │   ├── utils/
-│   │   │   └── view/
-│   │   └── resources/
-│   ├── test/
-│   │   ├── java/
-│   │   └── resources/
-│   ├── it/
-│   │   └── java/
-│   ├── e2e/
-│   │   └── java/
-│   └── bdd/
-│       ├── java/
-│       └── resources/
+├── .docker-wishlists/
+│   └── Dockerfile
+├── k8s/                        # Kubernetes manifests
+│   ├── 00-namespace.yaml
+│   ├── 01-secret.yaml
+│   ├── 02-configmap.yaml
+│   ├── 05-mysql-pvc.yaml
+│   ├── 10-mysql.yaml
+│   └── 20-wishlist-rest.yaml
+└── src/
+    └── main/
+        ├── java/
+        │   ├── api/            # REST layer (DTOs, mappers, router, service)
+        │   ├── app/            # Application entry point
+        │   ├── daos/           # Data access layer
+        │   ├── model/          # Domain model
+        │   └── utils/          # Shared utilities
+        └── resources/
+            └── META-INF/       # persistence.xml (JPA config)
 ```
-
-### Didactic note
-This layout follows a very useful convention:
-- `main` contains **production code**
-- `test` contains **unit tests**
-- `it` contains **integration tests**
-- `e2e` contains **end-to-end tests**
-- `bdd` contains support for **BDD-style specifications**
-
-Keeping these layers separate makes the intent of each test suite clearer and avoids mixing very different testing goals.
 
 ---
 
 ## Packages
 
 ### `api`
-Contains the **REST API layer**, built on top of [Javalin](https://javalin.io/).
 
-Sub-packages:
-- `dto` — Data Transfer Objects used to serialize/deserialize HTTP request and response bodies
-- `mapper` — mappers that convert between domain model objects and DTOs
-- `router` — registers the HTTP routes on the Javalin instance
-- `service` — service facade consumed by the router to execute business operations
+REST API layer built on Javalin.
 
----
+- `dto` — request/response Data Transfer Objects
+- `mapper` — conversions between domain model and DTOs
+- `router` — HTTP route registration
+- `service` — application-facing facade consumed by the router
 
 ### `app`
-Contains the **application entry point**.
 
-Responsibilities:
-- application bootstrap
-- initial startup logic
-- first wiring of the main components
-
----
-
-### `businesslogic`
-Contains the core application behavior.
-
-Responsibilities:
-- coordinate wishlist operations
-- mediate between UI and persistence
-- enforce application rules
-
----
+Application entry point (`WishlistRestApp`).
+Bootstraps Javalin, wires components, and reads configuration from environment variables or CLI arguments.
 
 ### `daos`
-Contains the data access layer.
 
-Responsibilities:
-- encapsulate database access
-- centralize CRUD and persistence logic
-- isolate business logic from JPA/Hibernate details
-
----
+Data access layer.
+Encapsulates JPA/Hibernate interactions and exposes CRUD operations.
 
 ### `model`
-Contains the domain model.
 
-Responsibilities:
-- represent the domain objects
-- define the data handled by the application
-- serve as the base for ORM persistence
-
----
-
-### `view`
-Contains the Swing user interface.
-
-Responsibilities:
-- render screens and dialogs
-- collect user input
-- delegate actions to the business layer
-
----
+Domain objects mapped to the database via JPA annotations.
 
 ### `utils`
-Contains shared support code.
 
-Responsibilities:
-- host small utilities or support annotations
-- isolate cross-cutting technical details from the core domain
+Shared support code and cross-cutting utilities.
 
 ---
 
-## Resources
+## Environment variables
 
-### `src/main/resources`
-Contains runtime resources.
+| Variable      | Description                              | Default (`persistence.xml`)                        |
+|---------------|------------------------------------------|----------------------------------------------------|
+| `PORT`        | HTTP port the server listens on          | `8080`                                             |
+| `DB_URL`      | Full JDBC URL of the MySQL instance      | `jdbc:mysql://localhost:3309/wishlists-schema`     |
+| `DB_USER`     | Database username                        | `java-client`                                      |
+| `DB_PASSWORD` | Database password                        | `password`                                         |
 
-Present elements:
-- `META-INF/`
-- `log4j2.xml`
-
-Typical role:
-- JPA configuration through `persistence.xml` inside `META-INF`
-- logging configuration
+> **Why environment variables?**
+>
+> Using environment variables makes the application easier to run in different environments without changing the code:
+> - locally
+> - inside Docker
+> - inside Kubernetes Pods
+>
+> This is one of the core ideas behind cloud-native applications.
 
 ---
 
-## Environment Variables
+## Build
 
-The REST entry point (`WishlistRestApp`) supports the following environment variables, which take precedence over the corresponding CLI arguments and `persistence.xml` defaults. This makes the application straightforward to configure in **Docker** and **Kubernetes** environments without rebuilding the image.
-
-| Variable      | Description                                                                 | Default (persistence.xml)                              |
-|---------------|-----------------------------------------------------------------------------|--------------------------------------------------------|
-| `PORT`        | HTTP port the Javalin server listens on                                     | `8080`                                                 |
-| `DB_URL`      | Full JDBC URL of the MySQL instance (e.g. `jdbc:mysql://mysql-svc:3306/wishlists`) | `jdbc:mysql://localhost:3309/wishlists-schema` |
-| `DB_USER`     | Database username                                                           | `java-client`                                          |
-| `DB_PASSWORD` | Database password                                                           | `password`                                             |
-
-Example (Docker):
 ```bash
-docker run \
-  -e PORT=8080 \
-  -e DB_URL=jdbc:mysql://mysql-svc:3306/wishlists \
-  -e DB_USER=java-client \
-  -e DB_PASSWORD=secret \
-  wishlists-rest:latest
+cd wishlists
+mvn clean package -DskipTests
 ```
 
-Example (Kubernetes `env` block in a Pod spec):
+The Maven assembly plugin produces a single executable fat jar:
+
+```
+target/wishlists-0.0.1-jar-with-dependencies.jar
+```
+
+> **Didactic note**
+>
+> A fat jar is a self-contained executable archive that includes the application and its dependencies.
+> This simplifies containerisation because the Docker image only needs Java and the jar itself.
+
+---
+
+## Run locally with Docker
+
+**Build the image:**
+
+```bash
+docker build -t wishlist-rest:local -f wishlists/.docker-wishlists/Dockerfile wishlists
+```
+
+**Start MySQL:**
+
+```bash
+docker run --name wishlist-mysql -d -p 3309:3306 -e MYSQL_ROOT_PASSWORD=password -e MYSQL_DATABASE=wishlists-schema -e MYSQL_USER=java-client -e MYSQL_PASSWORD=password mysql:8.0.33
+```
+
+**Start the REST API:**
+
+```bash
+docker run --name wishlist-rest -d -p 8080:8080 -e PORT=8080 -e DB_URL=jdbc:mysql://host.docker.internal:3309/wishlists-schema -e DB_USER=java-client -e DB_PASSWORD=password wishlist-rest:local
+```
+
+**Health check:**
+
+```bash
+curl http://localhost:8080/health
+```
+
+> **Didactic note**
+>
+> At this stage the application is simply running as containers managed by Docker.
+> There is no orchestration yet: if a container fails, Docker alone does not provide the same declarative self-healing and scaling model as Kubernetes.
+
+---
+
+## Kubernetes deployment
+
+All manifests are stored in `wishlists/k8s/`.
+
+Apply them in order:
+
+```bash
+kubectl apply -f wishlists/k8s/00-namespace.yaml
+kubectl apply -f wishlists/k8s/01-secret.yaml
+kubectl apply -f wishlists/k8s/02-configmap.yaml
+kubectl apply -f wishlists/k8s/05-mysql-pvc.yaml
+kubectl apply -f wishlists/k8s/10-mysql.yaml
+kubectl apply -f wishlists/k8s/20-wishlist-rest.yaml
+```
+
+Or apply the whole directory at once:
+
+```bash
+kubectl apply -f wishlists/k8s/
+```
+
+### Manifest overview
+
+| File                    | What it creates                                  |
+|-------------------------|--------------------------------------------------|
+| `00-namespace.yaml`     | Dedicated namespace for the application          |
+| `01-secret.yaml`        | DB credentials stored as a Kubernetes Secret     |
+| `02-configmap.yaml`     | Non-sensitive config such as port and DB URL     |
+| `05-mysql-pvc.yaml`     | PersistentVolumeClaim for MySQL data             |
+| `10-mysql.yaml`         | MySQL Deployment + ClusterIP Service             |
+| `20-wishlist-rest.yaml` | REST API Deployment + Service                    |
+
+### Kubernetes configuration model
+
+The REST API Pod receives configuration from Kubernetes resources instead of hardcoding values.
+
+Example:
+
 ```yaml
 env:
   - name: PORT
-    value: "8080"
+    valueFrom:
+      configMapKeyRef:
+        name: wishlist-config
+        key: PORT
   - name: DB_URL
-    value: "jdbc:mysql://mysql-svc:3306/wishlists"
+    valueFrom:
+      configMapKeyRef:
+        name: wishlist-config
+        key: DB_URL
   - name: DB_USER
     valueFrom:
       secretKeyRef:
-        name: db-secret
-        key: username
+        name: wishlist-db-secret
+        key: MYSQL_USER
   - name: DB_PASSWORD
     valueFrom:
       secretKeyRef:
-        name: db-secret
-        key: password
+        name: wishlist-db-secret
+        key: MYSQL_PASSWORD
 ```
 
----
-
-## Testing structure
-
-### Technologies
-Technologies used in this layer:
-- **JUnit** for test execution and lifecycle
-- **Mockito** for mocks and isolation
-- **AssertJ** for more expressive assertions
-- **AssertJ Swing** for UI tests
-
-### `src/test/java` — unit tests
-This area contains the fastest and most isolated tests.
-
-### Didactic note
-Unit tests verify a single class or a very small collaboration in isolation. They provide fast feedback and are the natural foundation for TDD.
+> **Didactic note**
+>
+> This separation reflects a standard Kubernetes design pattern:
+> - **ConfigMap** → non-sensitive configuration
+> - **Secret** → sensitive values such as passwords
+> - **Deployment** → desired number of running Pods
+> - **Service** → stable network endpoint for communication inside the cluster
 
 ---
 
-### `src/it/java` — integration tests
-This area contains tests that verify the collaboration between multiple components.
+## Running the project on Minikube
 
-Typical focus:
-- interaction between business logic and persistence
-- configuration correctness
-- database-related behavior
+This project has been developed and tested on Minikube, which provides a local Kubernetes cluster.
 
-### Didactic note
-Integration tests are slower than unit tests, but they validate whether individually correct parts also work together correctly.
+### 1. Start Minikube
 
----
+```bash
+minikube start --driver=docker
+```
 
-### `src/e2e/java` — end-to-end tests
-This area contains full-flow tests that exercise the system from a user-oriented perspective.
+### 2. Verify the cluster status
 
-Typical focus:
-- application startup
-- GUI interaction flows
-- complete business scenarios
+```bash
+kubectl get nodes
+minikube status
+kubectl cluster-info
+kubectl get pods -A
+```
 
-### Didactic note
-End-to-end tests provide the highest confidence on real behavior, but they are also the most expensive to maintain. In a learning project, they are useful because they show the difference between “code works in isolation” and “the system works as a whole”.
+> **Didactic note**
+>
+> These commands are useful to understand the structure of a running Kubernetes cluster:
+> - `kubectl get nodes` shows the available cluster nodes
+> - `minikube status` shows whether the local cluster is running
+> - `kubectl cluster-info` prints the control plane endpoints
+> - `kubectl get pods -A` lists Pods in all namespaces, including Kubernetes system components
+>
+> The Pods shown in `kube-system` belong to Kubernetes itself, not to the application.
 
----
+### Building the application image for Minikube
 
-### `src/bdd` — behavior-driven specifications
-This area supports **BDD-style** scenarios.
+From inside the `wishlists` folder:
 
-Technologies used:
-- **Cucumber** for executable specifications
-- feature files written in a natural-language style
-- Java step definitions that bind the scenarios to code
+```bash
+minikube image build -t wishlist-rest:local -f .docker-wishlists/Dockerfile .
+```
 
-### Didactic note
-BDD helps describe software behavior in a form that is more readable than technical test code alone. It is especially valuable because it shows the link between requirements, acceptance criteria, and automated verification.
-
----
-
-## Testing and quality tooling
-
-### JUnit
-JUnit is the baseline test framework used to run automated tests and organize test classes, methods, and lifecycle hooks.
-
-Why it matters here:
-- it provides the standard foundation for automated verification
-- it integrates naturally with Maven and CI
-- it supports the other testing layers built on top of it
-
-### Mockito
-Mockito is used to replace real collaborators with controlled test doubles.
-
-Why it matters here:
-- it helps isolate business logic
-- it reduces the need for heavy infrastructure in unit tests
-- it makes interaction-based tests easier to write
-
-### AssertJ
-AssertJ provides a fluent assertion style.
-
-Why it matters here:
-- assertions become more readable
-- failure messages are often clearer
-- tests become easier to understand for readers of the repository
-
-### Swing UI testing
-
-The Swing user interface is tested with **AssertJ Swing**, a library designed for functional testing of desktop GUIs. It allows tests to interact with windows and widgets in a way that is close to real user behavior, for example by clicking buttons, typing into text fields, and checking component state. In practice, this makes GUI tests more readable and more stable than low-level event-based checks.
-
-### Cucumber
-Cucumber supports **Behavior-Driven Development (BDD)** by turning executable scenarios into living specifications. In practice, feature files describe behavior in a human-readable way, while step definitions bind those steps to Java code. The project includes `cucumber-java` and `cucumber-junit` as test dependencies.
-
-Why it matters here:
-- it connects requirements to executable checks
-- it makes acceptance behavior visible even to non-developers
-- it is useful in a didactic portfolio because it shows testing beyond classic unit tests
-
-### JaCoCo
-JaCoCo is the code coverage tool used in the Maven build. In this project it is also exposed through a dedicated Maven profile, which makes it easy to generate coverage reports during CI. 
-
-Why it matters here:
-- it shows which parts of the code are exercised by tests
-- it helps identify weakly tested areas
-- it gives a measurable signal, even though coverage alone is never enough to prove quality
-
-### PIT / PITEST
-PIT performs **mutation testing**. Instead of only measuring whether code is executed, it changes the code in small ways and checks whether the test suite detects the changes. The project includes the `pitest-maven` plugin and a dedicated `pit` Maven profile that runs mutation coverage during the `verify` phase. 
-
-Why it matters here:
-- it is stricter than plain coverage
-- it reveals weak assertions and superficial tests
-- it is very useful in a TDD-oriented project because it measures the real fault-detection power of the test suite
-
-### Coveralls
-Coveralls is used to publish coverage information generated by the Maven build. The project includes the `coveralls-maven-plugin` and a CI workflow that runs the `coveralls` Maven profile.
-
-Why it matters here:
-- it makes coverage trends visible from outside the repository
-- it gives quick feedback through badges and hosted reports
-
-### SonarCloud
-SonarCloud is used for code quality analysis. The Maven configuration contains Sonar properties and exclusions, and the CI workflow runs the Sonar Maven scanner during verification. 
-
-Why it matters here:
-- it complements tests with static analysis
-- it helps surface maintainability and code-smell issues
+> **Didactic note**
+>
+> This command builds the image directly in the Minikube environment, making it immediately available to the local cluster without pushing it to an external registry.
+> This is especially convenient during development and experimentation.
 
 ---
 
-## Build and automation
-The project uses **Maven** not only to compile the code, but also to orchestrate different verification layers.
+## Useful Kubernetes commands used during development
 
-Relevant aspects:
-- executable jar packaging
-- separate handling of unit, integration, end-to-end, and BDD tests
-- test and quality reporting
-- coverage and mutation testing support
-- Docker support for the database
+**Apply manifests:**
+
+```bash
+kubectl apply -f wishlists/k8s/
+```
+
+**Inspect all resources in the application namespace:**
+
+```bash
+kubectl get all -n wishlist
+kubectl get pods -n wishlist
+```
+
+**Describe a Pod in detail:**
+
+```bash
+kubectl describe pod wishlist-rest-d9d76fb87-wsbhn -n wishlist
+```
+
+**Forward a Service port to the local machine:**
+
+```bash
+kubectl port-forward svc/wishlist-rest 8080:8080 -n wishlist
+```
+
+**Delete a Pod to observe self-healing:**
+
+```bash
+kubectl delete pod wishlist-rest-d9d76fb87-wsbhn -n wishlist
+```
+
+**Inspect logs from all REST API Pods:**
+
+```bash
+kubectl logs deployment/wishlist-rest -n wishlist --all-containers=true --prefix=true
+```
+
+> **Didactic note**
+>
+> These commands cover some of the most important day-to-day Kubernetes activities:
+> - `apply` → declare the desired state
+> - `get` → inspect the current state
+> - `describe` → obtain detailed diagnostic information
+> - `logs` → inspect application behaviour
+> - `port-forward` → expose an internal Service temporarily on localhost
+> - `delete pod` → observe Kubernetes self-healing in action
 
 ---
 
-## GitHub Actions
-The repository includes multiple GitHub Actions workflows dedicated to build portability and code quality. The workflow directory currently contains `maven_build_linux.yml`, `maven_build_mac_windows.yml`, `coveralls_sonar.yml`, and `pit.yml`. 
+## Health checks and probes
 
-### `maven_build_linux.yml`
-This workflow runs on pull requests on `ubuntu-latest`, tests both Java 11 and Java 17, caches Maven dependencies, and executes `xvfb-run mvn verify` in the `wishlists` directory. It also uploads failed GUI test artifacts when a build fails. `xvfb-run` is particularly relevant because Swing tests may need a virtual display in a headless CI environment. 
+The application exposes:
 
-### `maven_build_mac_windows.yml`
-This workflow runs on pull requests across a matrix of Java 11/17 and `macos-latest` / `windows-latest`. It executes `mvn test`, again caching Maven dependencies and archiving failed GUI test artifacts on failure. Its main purpose is portability: it checks that the project behaves consistently across operating systems and JDK versions. 
+```
+GET /health
+```
 
-### `coveralls_sonar.yml`
-This workflow runs on both push and pull request events on Ubuntu with JDK 17. It caches Sonar and Maven dependencies, executes `xvfb-run mvn verify -Pcoveralls` together with the Sonar Maven scanner, then generates and archives a Surefire report site. This workflow is the main CI entry point for coverage publishing and static quality analysis. 
+This endpoint is used by Kubernetes probes.
 
-### `pit.yml`
-This workflow runs on push and pull request events on Ubuntu with JDK 11, executes `xvfb-run mvn verify -Ppit`, and archives the PIT mutation reports as artifacts. Its purpose is to keep mutation testing part of the automated quality loop rather than a one-off local activity.
+### Probe types used in the project
+
+- **readinessProbe** — determines when a Pod is ready to receive traffic
+- **livenessProbe** — determines when a Pod should be restarted
+- **startupProbe** — protects slow-starting containers during bootstrap
+
+### Why `startupProbe` was introduced
+
+When scaling the REST API from one replica to multiple replicas, some Pods failed to become ready if started simultaneously.
+The cause was not port conflict, since each Pod has its own IP, but rather the fact that startup could take longer than expected under concurrent initialisation.
+
+Introducing a `startupProbe` gave the application enough time to complete bootstrap before liveness checks began to restart the container.
+
+> **Didactic note**
+>
+> A common Kubernetes lesson is that:
+> - a container being `Running` does not automatically mean it is `Ready`
+> - health checks must be tuned according to real application startup behaviour
+
+---
+
+## Persistent storage for MySQL
+
+Initially, MySQL used an `emptyDir` volume.
+This meant the database files were tied to the Pod lifecycle and could be lost when the Pod was recreated.
+
+The project was then improved by introducing:
+
+- a `PersistentVolumeClaim`
+- a persistent mount for `/var/lib/mysql`
+
+### Why this matters
+
+This change highlights one of the most important distinctions in Kubernetes:
+
+- **REST API** → mostly stateless
+- **MySQL** → clearly stateful
+
+Stateful workloads need persistent storage if their data must survive Pod recreation.
+
+---
+
+## Incremental project progress
+
+This Kubernetes setup was not created all at once.
+It evolved through a sequence of incremental steps, each introducing new concepts and solving new problems.
+
+### 1. Initial deployment: one Pod per component
+
+The first working version deployed:
+
+- one MySQL Pod
+- one REST API Pod
+
+This phase focused on:
+
+- understanding Deployments and Services
+- wiring environment variables via ConfigMap and Secret
+- verifying connectivity between the API and MySQL
+
+### 2. Manual scaling of the REST API
+
+The REST API Deployment was then scaled manually from one replica to multiple replicas.
+
+This helped demonstrate:
+
+- the declarative nature of Deployments
+- Kubernetes self-healing
+- how multiple Pods can serve the same application behind a Service
+
+### 3. Debugging multi-replica startup issues
+
+When multiple REST Pods were started simultaneously, some failed readiness and liveness checks.
+
+**Observed issue:**
+
+- the application did not always open port 8080 quickly enough under concurrent startup
+- readiness and liveness probes began too early
+- Kubernetes restarted the Pods before startup completed
+
+**Resolution:**
+
+- introduce a `startupProbe`
+- make probe timing more tolerant of slower bootstrap
+
+### 4. Observing self-healing
+
+Deleting a Pod manually showed that Kubernetes recreated it automatically.
+
+This demonstrated one of the platform's core ideas:
+
+- the user declares the desired number of replicas
+- Kubernetes continuously reconciles actual state with desired state
+
+### 5. Moving from ephemeral to persistent database storage
+
+The original MySQL setup used temporary storage.
+A later improvement introduced a `PersistentVolumeClaim`, so that database data could survive Pod recreation.
+
+This made the system more realistic and introduced persistent storage as a key Kubernetes concept.
+
+---
+
+## What this project currently demonstrates
+
+At its current stage, the project demonstrates:
+
+- Docker containerisation of a Java REST API
+- deployment of a multi-component application on Kubernetes
+- use of Namespace, ConfigMap, Secret, Deployment and Service
+- health checks with readiness, liveness and startup probes
+- manual horizontal scaling of the REST API
+- Kubernetes self-healing behaviour
+- persistent storage for a stateful component (MySQL)
+- local Kubernetes development with Minikube
+
+---
+
+## Next possible steps
+
+Possible future improvements include:
+
+- Horizontal Pod Autoscaler (HPA) for the REST API
+- resource requests and limits
+- multi-node Minikube experiments
+- CI/CD pipeline for automatic image build and deployment
+- Ingress configuration for cleaner external access
+- StatefulSet-based MySQL deployment for a more advanced stateful design
+
+---
+
+## Main endpoints
+
+| Method   | Path                    |
+|----------|-------------------------|
+| `GET`    | `/health`               |
+| `GET`    | `/api/wishlists`        |
+| `GET`    | `/api/wishlists/{id}`   |
+| `POST`   | `/api/wishlists`        |
+| `DELETE` | `/api/wishlists/{id}`   |
+
+---
+
+## Summary
+
+This project started as a simple Java REST API and gradually evolved into a practical Kubernetes learning lab.
+
+Rather than only showing the final deployment result, it documents the progression from:
+
+- single-container execution,
+- to orchestrated multi-Pod deployment,
+- to health-check tuning,
+- to persistent storage and scaling behaviour.
+
+For this reason, it serves both as:
+
+- a deployable application,
+- and a compact portfolio project on Kubernetes fundamentals.
