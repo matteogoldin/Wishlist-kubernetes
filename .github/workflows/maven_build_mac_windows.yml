@@ -1,0 +1,44 @@
+name: Java CI with Maven
+
+on:
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ${{matrix.os}}
+
+    env:
+      workdir: wishlists
+
+    strategy:
+      matrix:
+        java: [11,17]
+        os: [macos-latest, windows-latest]
+
+    name: Build with Java ${{matrix.java}} on ${{matrix.os}}
+
+    steps:
+      - uses: actions/checkout@v2 # Clones the repository into the virtual environment
+
+      - name: Set up JDK ${{matrix.java}}
+        uses: actions/setup-java@v1 # Installs the JDK in the virtual environment
+        with:
+          java-version: ${{matrix.java}}
+
+      - name: Cache Maven packages 
+        uses: actions/cache@v2 # Cache Maven packages to speed up the building process
+        with:
+          path: ~/.m2
+          key: ${{ runner.os }}-m2-jdk${{ matrix.java }}-${{ hashFiles('**/pom.xml', '**/*.yml') }}
+          restore-keys: ${{ runner.os }}-m2-
+
+      - name: Build with Maven
+        run: mvn test
+        working-directory: ${{ env.workdir }}
+      
+      - name: Archive failed gui test
+        uses: actions/upload-artifact@v2
+        if: ${{ failure() }}
+        with:
+          name: failed-gui-test
+          path: '**/failed-gui-tests'

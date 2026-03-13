@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<persistence version="2.2" xmlns="http://xmlns.jcp.org/xml/ns/persistence"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://xmlns.jcp.org/xml/ns/persistence http://xmlns.jcp.org/xml/ns/persistence/persistence_2_2.xsd">
+
+	<!--
+	    WishlistRestApp overwrite at runtime URL/user/password throught env variable
+	     DB_URL, DB_USER, DB_PASSWORD.
+	-->
+	<persistence-unit name="wishlists-pu">
+		<description>Wishlists persistence unit</description>
+		<class>model.Wishlist</class>
+		<exclude-unlisted-classes>true</exclude-unlisted-classes>
+		<properties>
+			<property name="hibernate.hbm2ddl.auto" value="update" />
+			<property name="hibernate.dialect" value="org.hibernate.dialect.MySQL8Dialect" />
+			<property name="jakarta.persistence.jdbc.driver" value="com.mysql.cj.jdbc.Driver" />
+			<property name="jakarta.persistence.jdbc.url" value="jdbc:mysql://localhost:3309/wishlists-schema?autoReconnect=true" />
+			<property name="jakarta.persistence.jdbc.user" value="java-client" />
+			<property name="jakarta.persistence.jdbc.password" value="password" />
+			<property name="hibernate.show_sql" value="false" />
+			<property name="hibernate.format_sql" value="false" />
+		</properties>
+	</persistence-unit>
+
+</persistence>
