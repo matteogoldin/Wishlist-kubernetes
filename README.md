@@ -24,7 +24,52 @@
   ```bash
   java -jar <full-path-project-root-directory>\target\wishlists-0.0.1-jar-with-dependencies.jar
   ```
-  
+
+---
+
+## Run the REST API in Docker
+
+The Javalin REST API can be packaged and executed as a Docker container.
+
+Build the image from the repository root:
+
+```bash
+docker build -t wishlist-rest:local -f wishlists/.docker-wishlists/Dockerfile wishlists
+```
+
+Start a MySQL container:
+
+```bash
+docker run --name wishlist-mysql -d \
+  -p 3309:3306 \
+  -e MYSQL_ROOT_PASSWORD=password \
+  -e MYSQL_DATABASE=wishlists-schema \
+  -e MYSQL_USER=java-client \
+  -e MYSQL_PASSWORD=password \
+  --restart unless-stopped \
+  mysql:8.0.33
+```
+
+Start the REST API container:
+
+```bash
+docker run --name wishlist-rest -d \
+  -p 8080:8080 \
+  -e PORT=8080 \
+  -e DB_URL=jdbc:mysql://host.docker.internal:3309/wishlists-schema \
+  -e DB_USER=java-client \
+  -e DB_PASSWORD=password \
+  wishlist-rest:local
+```
+
+Health check:
+
+```bash
+curl http://localhost:8080/health
+```
+
+---
+
 ## Scope
 **Wishlists App** is a small Java application for wishlist management, created in a learning context focused on **TDD, build automation, quality checks, and CI**. The project started as a **Swing desktop application** backed by **MySQL** and built with **Maven**, and has since been extended to include a **REST API layer built with Javalin**, enabling HTTP-based access to the same business logic. The REST entry point is designed to be **container-friendly** and deployable on **Docker and Kubernetes**.
 
