@@ -32,8 +32,10 @@ wishlists/
 │   ├── 01-secret.yaml
 │   ├── 02-configmap.yaml
 │   ├── 05-mysql-pvc.yaml
-│   ├── 10-mysql.yaml
-│   └── 20-wishlist-rest.yaml
+│   ├── 10-mysql-deployments.yaml
+│   ├── 11-mysql-service.yaml
+│   ├── 20-wishlist-rest-deployment.yaml
+│   └── 21-wishlist-rest-service.yaml
 └── src/
     └── main/
         ├── java/
@@ -163,8 +165,10 @@ kubectl apply -f wishlists/k8s/00-namespace.yaml
 kubectl apply -f wishlists/k8s/01-secret.yaml
 kubectl apply -f wishlists/k8s/02-configmap.yaml
 kubectl apply -f wishlists/k8s/05-mysql-pvc.yaml
-kubectl apply -f wishlists/k8s/10-mysql.yaml
-kubectl apply -f wishlists/k8s/20-wishlist-rest.yaml
+kubectl apply -f wishlists/k8s/10-mysql-deployments.yaml
+kubectl apply -f wishlists/k8s/11-mysql-service.yaml
+kubectl apply -f wishlists/k8s/20-wishlist-rest-deployment.yaml
+kubectl apply -f wishlists/k8s/21-wishlist-rest-service.yaml
 ```
 
 Or apply the whole directory at once:
@@ -175,14 +179,16 @@ kubectl apply -f wishlists/k8s/
 
 ### Manifest overview
 
-| File                    | What it creates                                  |
-|-------------------------|--------------------------------------------------|
-| `00-namespace.yaml`     | Dedicated namespace for the application          |
-| `01-secret.yaml`        | DB credentials stored as a Kubernetes Secret     |
-| `02-configmap.yaml`     | Non-sensitive config such as port and DB URL     |
-| `05-mysql-pvc.yaml`     | PersistentVolumeClaim for MySQL data             |
-| `10-mysql.yaml`         | MySQL Deployment + ClusterIP Service             |
-| `20-wishlist-rest.yaml` | REST API Deployment + Service                    |
+| File                              | What it creates                              |
+|-----------------------------------|----------------------------------------------|
+| `00-namespace.yaml`               | Dedicated namespace for the application      |
+| `01-secret.yaml`                  | DB credentials stored as a Kubernetes Secret |
+| `02-configmap.yaml`               | Non-sensitive config such as port and DB URL |
+| `05-mysql-pvc.yaml`               | PersistentVolumeClaim for MySQL data         |
+| `10-mysql-deployments.yaml`       | MySQL Deployment                             |
+| `11-mysql-service.yaml`           | MySQL ClusterIP Service                      |
+| `20-wishlist-rest-deployment.yaml`| REST API Deployment                          |
+| `21-wishlist-rest-service.yaml`   | REST API Service                             |
 
 ### Kubernetes configuration model
 
@@ -306,6 +312,20 @@ kubectl delete pod wishlist-rest-d9d76fb87-wsbhn -n wishlist
 ```bash
 kubectl logs deployment/wishlist-rest -n wishlist --all-containers=true --prefix=true
 ```
+
+**Re-deploy after an image update:**
+
+```bash
+minikube image build -t wishlist-rest:local -f .docker-wishlists/Dockerfile .
+kubectl rollout restart deployment wishlist-rest -n wishlist
+kubectl rollout status deployment wishlist-rest -n wishlist
+```
+
+> **Didactic note**
+>
+> Since the image tag `wishlist-rest:local` does not change, Kubernetes would not detect any update on its own.
+> `kubectl rollout restart` forces the Deployment to recreate its Pods, picking up the newly built image.
+> `kubectl rollout status` then monitors the rollout until all Pods are ready.
 
 > **Didactic note**
 >
