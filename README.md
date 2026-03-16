@@ -35,7 +35,8 @@ wishlists/
 │   ├── 10-mysql-deployments.yaml
 │   ├── 11-mysql-service.yaml
 │   ├── 20-wishlist-rest-deployment.yaml
-│   └── 21-wishlist-rest-service.yaml
+│   ├── 21-wishlist-rest-service.yaml
+│   └── 22-wishlist-rest-ingress.yaml
 └── src/
     └── main/
         ├── java/
@@ -170,6 +171,7 @@ kubectl apply -f wishlists/k8s/10-mysql-deployments.yaml
 kubectl apply -f wishlists/k8s/11-mysql-service.yaml
 kubectl apply -f wishlists/k8s/20-wishlist-rest-deployment.yaml
 kubectl apply -f wishlists/k8s/21-wishlist-rest-service.yaml
+kubectl apply -f wishlists/k8s/22-wishlist-rest-ingress.yaml
 ```
 
 Or apply the whole directory at once:
@@ -190,6 +192,7 @@ kubectl apply -f wishlists/k8s/
 | `11-mysql-service.yaml`           | MySQL ClusterIP Service                      |
 | `20-wishlist-rest-deployment.yaml`| REST API Deployment                          |
 | `21-wishlist-rest-service.yaml`   | REST API Service                             |
+| `22-wishlist-rest-ingress.yaml`   | Ingress rule for host-based routing          |
 
 ### Kubernetes configuration model
 
@@ -451,6 +454,72 @@ A later improvement introduced a `PersistentVolumeClaim`, so that database data 
 
 This made the system more realistic and introduced persistent storage as a key Kubernetes concept.
 
+### 6. Ingress configuration and load balancing verification
+
+With multiple REST API replicas already running, an Ingress resource was introduced to provide host-based routing and to observe load balancing in action.
+
+**Steps performed:**
+
+1. Enable the NGINX Ingress controller addon on Minikube:
+
+```bash
+minikube addons enable ingress
+```
+
+2. Apply the Ingress manifest:
+
+```bash
+kubectl apply -f wishlists/k8s/22-wishlist-rest-ingress.yaml
+```
+
+3. Open a tunnel so that the Minikube cluster IP becomes reachable on `127.0.0.1`:
+
+```bash
+minikube tunnel
+```
+
+4. Verify the Ingress was assigned an address and inspect its backends:
+
+```bash
+kubectl get ingress -n wishlist
+kubectl describe ingress wishlist-rest-ingress -n wishlist
+```
+
+The `describe` output confirmed that the Ingress was routing to all five running Pod IPs on port 8080:
+
+```
+Rules:
+  Host           Path  Backends
+  ----           ----  --------
+  wishlist.test
+                 /   wishlist-rest:8080 (10.244.0.28:8080,10.244.0.29:8080,10.244.0.30:8080 + 2 more...)
+```
+
+5. Send repeated requests using the `Host` header and observe which Pod responds:
+
+```bash
+curl -H "Host: wishlist.test" http://127.0.0.1/health
+# {"status":"UP","podName":"wishlist-rest-79dff6b5f7-7xxbq"}
+
+curl -H "Host: wishlist.test" http://127.0.0.1/health
+# {"podName":"wishlist-rest-79dff6b5f7-4jwkc","status":"UP"}
+```
+
+Different `podName` values across responses confirmed that traffic was being distributed across multiple replicas.
+
+**Why `minikube tunnel` is necessary:**
+
+In a standard cloud environment, a LoadBalancer Service or an Ingress controller is automatically assigned a public IP by the cloud provider.
+Minikube runs inside a virtual machine or a Docker network and is therefore isolated from the host machine's network.
+`minikube tunnel` creates a network route between the host and the Minikube cluster IP (`192.168.49.2` in this case), making the cluster reachable on `127.0.0.1`.
+Without the tunnel, the Ingress address would be assigned but unreachable from the host.
+
+> **Didactic note — how load balancing works in Kubernetes**
+>
+> When a Service of type `ClusterIP` sits in front of multiple Pods, `kube-proxy` maintains a set of `iptables` (or IPVS) rules that distribute incoming connections across all healthy Pod endpoints in a round-robin fashion.
+> The Ingress controller sits in front of the Service and forwards each HTTP request to one of the available backends listed in the Ingress rules.
+> Because each Pod has a unique name injected via the Downward API, calling `/health` repeatedly and comparing `podName` values is a simple but effective way to observe that requests are reaching different Pods — and therefore that load balancing is working as expected.
+
 ---
 
 ## What this project currently demonstrates
@@ -465,6 +534,8 @@ At its current stage, the project demonstrates:
 - Kubernetes self-healing behaviour
 - persistent storage for a stateful component (MySQL)
 - per-Pod observability via the Kubernetes Downward API (`POD_NAME` in `/health`)
+- Ingress configuration with host-based routing via the NGINX controller
+- load balancing verification across multiple replicas using `podName`
 - local Kubernetes development with Minikube
 
 ---
@@ -477,8 +548,6 @@ Possible future improvements include:
 - resource requests and limits
 - multi-node Minikube experiments
 - CI/CD pipeline for automatic image build and deployment
-- Ingress configuration for cleaner external access
-- StatefulSet-based MySQL deployment for a more advanced stateful design
 
 ---
 
