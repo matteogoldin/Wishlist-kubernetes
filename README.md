@@ -89,6 +89,7 @@ Shared support code and cross-cutting utilities.
 | `DB_URL`      | Full JDBC URL of the MySQL instance      | `jdbc:mysql://localhost:3309/wishlists-schema`     |
 | `DB_USER`     | Database username                        | `java-client`                                      |
 | `DB_PASSWORD` | Database password                        | `password`                                         |
+| `POD_NAME`    | Name of the Pod injected by Kubernetes   | `local-dev`                                        |
 
 > **Why environment variables?**
 >
@@ -463,6 +464,7 @@ At its current stage, the project demonstrates:
 - manual horizontal scaling of the REST API
 - Kubernetes self-healing behaviour
 - persistent storage for a stateful component (MySQL)
+- per-Pod observability via the Kubernetes Downward API (`POD_NAME` in `/health`)
 - local Kubernetes development with Minikube
 
 ---
@@ -489,6 +491,22 @@ Possible future improvements include:
 | `GET`    | `/api/wishlists/{id}`   |
 | `POST`   | `/api/wishlists`        |
 | `DELETE` | `/api/wishlists/{id}`   |
+
+The `/health` endpoint returns a JSON response that includes the name of the serving Pod:
+
+```json
+{
+  "status": "UP",
+  "podName": "wishlist-rest-d9d76fb87-wsbhn"
+}
+```
+
+> **Didactic note**
+>
+> Including `podName` in the health response makes it immediately visible which Pod handled the request.
+> This is useful when multiple replicas are running: repeated calls to `/health` (or any load-balanced endpoint)
+> may return different Pod names, demonstrating that traffic is distributed across replicas.
+> The value is injected via the Kubernetes Downward API (`fieldRef: metadata.name`) rather than hardcoded.
 
 ---
 

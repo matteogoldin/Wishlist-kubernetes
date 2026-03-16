@@ -14,6 +14,9 @@ public class WishlistRouter {
 
     private static final Logger LOGGER = LogManager.getLogger(WishlistRouter.class);
 
+    private static final String POD_NAME =
+            System.getenv().getOrDefault("POD_NAME", "local-dev");
+
     private final WishlistService wishlistService;
 
     public WishlistRouter(WishlistService wishlistService) {
@@ -21,15 +24,19 @@ public class WishlistRouter {
     }
 
     public void registerRoutes(JavalinConfig config) {
+        config.routes.get("/health", this::health);
         config.routes.get("/api/wishlists", this::getAll);
         config.routes.get("/api/wishlists/{id}", this::getById);
         config.routes.post("/api/wishlists", this::create);
         config.routes.delete("/api/wishlists/{id}", this::delete);
+    }
 
-        config.routes.get("/health", ctx -> {
-            LOGGER.debug("Health check requested");
-            ctx.json(Map.of("status", "UP"));
-        });
+    void health(Context ctx) {
+        LOGGER.debug("Health check requested from pod {}", POD_NAME);
+        ctx.json(Map.of(
+                "status", "UP",
+                "podName", POD_NAME
+        ));
     }
 
     void getAll(Context ctx) {
