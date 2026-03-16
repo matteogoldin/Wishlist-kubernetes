@@ -36,7 +36,8 @@ wishlists/
 │   ├── 11-mysql-service.yaml
 │   ├── 20-wishlist-rest-deployment.yaml
 │   ├── 21-wishlist-rest-service.yaml
-│   └── 22-wishlist-rest-ingress.yaml
+│   ├── 22-wishlist-rest-ingress.yaml
+│   └── 23-wishlist-rest-hpa.yaml
 └── src/
     └── main/
         ├── java/
@@ -172,6 +173,7 @@ kubectl apply -f wishlists/k8s/11-mysql-service.yaml
 kubectl apply -f wishlists/k8s/20-wishlist-rest-deployment.yaml
 kubectl apply -f wishlists/k8s/21-wishlist-rest-service.yaml
 kubectl apply -f wishlists/k8s/22-wishlist-rest-ingress.yaml
+kubectl apply -f wishlists/k8s/23-wishlist-rest-hpa.yaml
 ```
 
 Or apply the whole directory at once:
@@ -193,6 +195,7 @@ kubectl apply -f wishlists/k8s/
 | `20-wishlist-rest-deployment.yaml`| REST API Deployment                          |
 | `21-wishlist-rest-service.yaml`   | REST API Service                             |
 | `22-wishlist-rest-ingress.yaml`   | Ingress rule for host-based routing          |
+| `23-wishlist-rest-hpa.yaml`       | HorizontalPodAutoscaler for the REST API     |
 
 ### Kubernetes configuration model
 
@@ -325,11 +328,40 @@ kubectl rollout restart deployment wishlist-rest -n wishlist
 kubectl rollout status deployment wishlist-rest -n wishlist
 ```
 
-> **Didactic note**
->
-> Since the image tag `wishlist-rest:local` does not change, Kubernetes would not detect any update on its own.
-> `kubectl rollout restart` forces the Deployment to recreate its Pods, picking up the newly built image.
-> `kubectl rollout status` then monitors the rollout until all Pods are ready.
+**Inspect HPA status:**
+
+```bash
+kubectl get hpa -n wishlist
+kubectl describe hpa wishlist-rest -n wishlist
+```
+
+**Observe Pod resource usage:**
+
+```bash
+kubectl top pods -n wishlist
+```
+
+**Watch HPA and Pods live (two separate terminals):**
+
+```bash
+# terminal 1 — watch HPA
+kubectl get hpa -n wishlist -w
+
+# terminal 2 — watch Pods
+kubectl get pods -n wishlist -w
+```
+
+**Generate load to trigger autoscaling:**
+
+```bash
+kubectl run loadgen --rm -it --image=curlimages/curl --restart=Never -n wishlist -- sh
+# inside the shell:
+while true; do
+  for i in $(seq 1 50); do
+    curl -s http://wishlist-rest:8080/api/wishlists > /dev/null
+  done
+done
+```
 
 > **Didactic note**
 >
@@ -340,6 +372,8 @@ kubectl rollout status deployment wishlist-rest -n wishlist
 > - `logs` → inspect application behaviour
 > - `port-forward` → expose an internal Service temporarily on localhost
 > - `delete pod` → observe Kubernetes self-healing in action
+> - `get hpa` / `describe hpa` → inspect Horizontal Pod Autoscaler status
+> - `top pods` → monitor resource usage of Pods
 
 ---
 
@@ -520,6 +554,124 @@ Without the tunnel, the Ingress address would be assigned but unreachable from t
 > The Ingress controller sits in front of the Service and forwards each HTTP request to one of the available backends listed in the Ingress rules.
 > Because each Pod has a unique name injected via the Downward API, calling `/health` repeatedly and comparing `podName` values is a simple but effective way to observe that requests are reaching different Pods — and therefore that load balancing is working as expected.
 
+### 7. Resource allocation and autoscaling (HPA)
+
+With the application running stably behind the Ingress, the next step was to introduce explicit resource budgets for each Pod and to let Kubernetes scale the number of replicas automatically based on CPU usage.
+
+**Part 1 — Resource requests and limits**
+
+CPU and memory constraints were added to the Deployment:
+
+```yaml
+resources:
+  requests:
+    cpu: "150m"
+    memory: "256Mi"
+  limits:
+    cpu: "500m"
+    memory: "512Mi"
+```
+
+The updated Deployment was applied and verified:
+
+```bash
+kubectl apply -f wishlists/k8s/20-wishlist-rest-deployment.yaml
+kubectl describe deployment wishlist-rest -n wishlist
+```
+
+The `describe` output confirmed the new limits and requests were active.
+
+**Part 2 — Enabling the metrics server**
+
+The HPA needs real-time CPU metrics to make scaling decisions.
+The Minikube metrics-server addon was enabled:
+
+```bash
+minikube addons enable metrics-server
+```
+
+After a short wait for the metrics pipeline to start:
+
+```bash
+kubectl top node
+# NAME       CPU(cores)   CPU%   MEMORY(bytes)   MEMORY%
+# minikube   261m         1%     2087Mi          6%
+```
+
+**Part 3 — Applying the HPA**
+
+The HPA manifest was applied:
+
+```bash
+kubectl apply -f wishlists/k8s/23-wishlist-rest-hpa.yaml
+kubectl get hpa -n wishlist
+# NAME            REFERENCE                  TARGETS       MINPODS   MAXPODS   REPLICAS   AGE
+# wishlist-rest   Deployment/wishlist-rest   cpu: 3%/70%   1         5         1          28s
+```
+
+The HPA configuration:
+- target: CPU utilisation at 70 % averaged across all replicas
+- minimum replicas: 1
+- maximum replicas: 5
+- scale-down stabilisation window: 60 seconds
+
+**Part 4 — Load test and observed behaviour**
+
+A load generator was run inside the cluster:
+
+```bash
+kubectl run loadgen --rm -it --image=curlimages/curl --restart=Never -n wishlist -- sh
+# inside the shell:
+while true; do
+  for i in $(seq 1 50); do
+    curl -s http://wishlist-rest:8080/api/wishlists > /dev/null
+  done
+done
+```
+
+The HPA was observed in a separate terminal with `kubectl get hpa -n wishlist -w`.
+The full sequence recorded:
+
+```
+TARGETS         REPLICAS
+cpu: 3%/70%     1        ← idle baseline
+cpu: 100%/70%   1        ← load hits, threshold exceeded
+cpu: 100%/70%   2        ← scale-up: 1 → 2  (≈15 s)
+cpu: 41%/70%    2        ← load redistributed across 2 pods
+cpu: 171%/70%   2        ← load spike, threshold exceeded again
+cpu: 171%/70%   4        ← scale-up: 2 → 4  (≈15 s)
+cpu: 171%/70%   5        ← scale-up: 4 → 5  (cap reached)
+cpu: 50%/70%    5        ← load easing
+cpu: 25%/70%    5        ← well below threshold
+cpu: 2%/70%     5        ← load generator stopped
+cpu: 2%/70%     5        ← stabilisation window in progress (60 s)
+cpu: 2%/70%     2        ← scale-down: 5 → 2  (after window)
+cpu: 2%/70%     1        ← scale-down: 2 → 1  (back to minimum)
+```
+
+**Why scale-up reacts immediately but scale-down is deliberately slower:**
+
+Scale-up is time-critical: if CPU is already saturated, every extra second without new replicas means degraded or failed requests.
+Kubernetes therefore acts on the first sustained breach of the threshold, with no stabilisation window by default.
+
+Scale-down, on the other hand, must be conservative.
+CPU spikes are often short-lived: a brief burst of traffic that lasts only a few seconds would otherwise trigger an immediate removal of Pods, which then need to be recreated seconds later when the next burst arrives.
+This oscillation (called **flapping**) wastes resources and introduces latency.
+The `stabilizationWindowSeconds: 60` setting tells the HPA to wait until the CPU has been below the threshold continuously for 60 seconds before reducing replicas, preventing unnecessary churn.
+
+> **Didactic note — how the HPA works**
+>
+> The HPA controller polls the metrics server every 15 seconds (default).
+> It computes the desired replica count as:
+>
+> ```
+> desiredReplicas = ceil(currentReplicas × (currentMetric / targetMetric))
+> ```
+>
+> For scale-up this value is applied almost immediately.
+> For scale-down the HPA looks back over the stabilisation window and picks the **maximum** desired replica count seen in that period — meaning it only scales down when every sample in the window agrees that fewer replicas are sufficient.
+> This asymmetry is intentional: it is always safer to have one replica too many than one too few.
+
 ---
 
 ## What this project currently demonstrates
@@ -536,6 +688,8 @@ At its current stage, the project demonstrates:
 - per-Pod observability via the Kubernetes Downward API (`POD_NAME` in `/health`)
 - Ingress configuration with host-based routing via the NGINX controller
 - load balancing verification across multiple replicas using `podName`
+- explicit resource requests and limits per Pod
+- CPU-based autoscaling with HPA (scale-up and stabilised scale-down)
 - local Kubernetes development with Minikube
 
 ---
@@ -544,8 +698,6 @@ At its current stage, the project demonstrates:
 
 Possible future improvements include:
 
-- Horizontal Pod Autoscaler (HPA) for the REST API
-- resource requests and limits
 - multi-node Minikube experiments
 - CI/CD pipeline for automatic image build and deployment
 

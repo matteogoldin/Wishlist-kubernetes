@@ -5,7 +5,7 @@ metadata:
   name: wishlist-rest
   namespace: wishlist
 spec:
-  replicas: 5
+  replicas: 1
   selector:
     matchLabels:
       app: wishlist-rest
@@ -45,6 +45,13 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.name
+          resources:
+            requests:
+              cpu: "150m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
           readinessProbe:
             httpGet:
               path: /health
