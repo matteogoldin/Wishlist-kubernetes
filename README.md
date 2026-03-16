@@ -674,6 +674,17 @@ The `stabilizationWindowSeconds: 60` setting tells the HPA to wait until the CPU
 
 ---
 
+## Cleanup
+
+To stop the local cluster and free all resources:
+
+```bash
+minikube stop    # stops the cluster, preserves its state
+minikube delete  # destroys the cluster and removes all data
+```
+
+---
+
 ## What this project currently demonstrates
 
 At its current stage, the project demonstrates:
